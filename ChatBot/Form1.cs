@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
+using System.IO; // 'File' hatasını çözmek için gerekli
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -10,20 +11,8 @@ namespace ChatBot
 {
     public partial class Form1 : Form
     {
-        // YENİ OLUŞTURDUĞUN projenin anahtarını buraya yapıştır
-        private const string API_KEY = "AIzaSyCNVCwvFN3RjWj1Hv1RJtC9_jx4Gy27uic";
-
-        // 2025 sonu itibariyle en geniş kota 'gemini-1.5-flash' modelindedir.
-      
+        // MODEL_NAME hatasını çözmek için buraya ekliyoruz
         private const string MODEL_NAME = "gemini-2.5-flash";
-
-        // API anahtarınızı buraya tekrar yapıştırın
-
-
-        // URL yapısını v1beta olarak güncelleyelim (2.5 modelleri beta aşamasındadır)
-        private const string GEMINI_URL =
-            "https://generativelanguage.googleapis.com/v1/models/" + MODEL_NAME + ":generateContent?key=" + API_KEY;
-      
         private readonly HttpClient _httpClient;
 
         public Form1()
@@ -32,6 +21,26 @@ namespace ChatBot
             _httpClient = new HttpClient();
             _httpClient.Timeout = TimeSpan.FromSeconds(60);
             lblStatus.Text = "Durum: Hazır";
+        }
+
+        // secrets.json dosyasından anahtarı okuyan yardımcı metot
+        private string GetApiKeyFromSecrets()
+        {
+            try
+            {
+                string path = "secrets.json";
+                if (File.Exists(path))
+                {
+                    string json = File.ReadAllText(path);
+                    JObject config = JObject.Parse(json);
+                    return config["GeminiApiKey"]?.ToString();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Config okuma hatası: " + ex.Message);
+            }
+            return null;
         }
 
         private async void btnSend_Click(object sender, EventArgs e)
@@ -48,10 +57,22 @@ namespace ChatBot
             }
         }
 
+        // İki ayrı SendMessageAsync vardı, tek bir metotta birleştirdik
         private async Task SendMessageAsync()
         {
             string userMessage = txtMessage.Text.Trim();
             if (string.IsNullOrEmpty(userMessage)) return;
+
+            // 1. API Anahtarını al
+            string apiKey = GetApiKeyFromSecrets();
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                MessageBox.Show("API Anahtarı bulunamadı! Lütfen secrets.json dosyasını kontrol edin.");
+                return;
+            }
+
+            // 2. Dinamik URL oluştur
+            string url = "https://generativelanguage.googleapis.com/v1/models/" + MODEL_NAME + ":generateContent?key=" + apiKey;
 
             AppendToHistory("Sen", userMessage);
             txtMessage.Clear();
@@ -69,12 +90,12 @@ namespace ChatBot
                 string json = JsonConvert.SerializeObject(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                HttpResponseMessage response = await _httpClient.PostAsync(GEMINI_URL, content);
+                // URL değişkenini burada kullanıyoruz
+                HttpResponseMessage response = await _httpClient.PostAsync(url, content);
                 string responseJson = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    // Hata mesajını daha okunaklı hale getirdik
                     JObject errorObj = JObject.Parse(responseJson);
                     string errMsg = errorObj["error"]?["message"]?.ToString() ?? "Bilinmeyen Hata";
                     AppendToHistory("Sistem", "Hata (" + (int)response.StatusCode + "): " + errMsg);
