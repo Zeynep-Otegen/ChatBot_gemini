@@ -1,4 +1,4 @@
-İndir:
+İndir:https://github.com/Zeynep-Otegen/ChatBot_gemini/releases/tag/chat
 # ChatBot
 ChatBot (Gemini API – WinForms)
 
